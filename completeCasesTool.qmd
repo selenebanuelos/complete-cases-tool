@@ -1,0 +1,155 @@
+---
+title: "Variable Selection Tool to Maximize Complete Cases"
+author: "Selene Banuelos"
+format: 
+    html:
+        df-print: kable
+editor: visual
+---
+
+## Summary
+
+The purpose of this script is to evaluate the number of complete cases for every possible combination of variables in your data, to help you decide which variables to keep and which to drop to maximize sample size.
+
+## Description
+
+When doing complete case analysis, researchers must drop participants that are missing values in one or more of the variables included in their model. For this reason, some combinations of variables may result in a smaller sample size than others due to varying degrees of missingness across variables. At times, a researcher must make a decision about which variables are most important to keep in their study while taking into consideration how inclusions of those variables will affect the number of complete cases, and in turn, the final analytical sample size. This script was designed as a tool to help in that decision. A user can import their data, run this script, and obtain an output that consists of a table that lists every possible combination of variables present in the dataset and the corresponding number of complete cases for each given combination.
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(missMethods)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Functions
+
+The code used in the createCombinations function has been adapted from Stack Overflow user, @Park <https://stackoverflow.com/users/16729175/park>
+
+The original code can be found here: <https://stackoverflow.com/questions/70060473/create-combination-of-all-elements-in-a-list>
+
+createCombinations is a function that creates all possible combinations of elements in a given list
+
+```{r}
+createCombinations <- function(input){
+  n <- length(input)
+  x <- c(TRUE,FALSE)
+  
+  y <- expand.grid(rep(list(x),n)) %>%
+    filter(rowSums(.) != 0)
+  
+  for (i in 1:length(input)){
+    y[,i] [y[,i]] <- input[i]
+    y[,i][y[,i] != input[i]] <- ""
+    
+  }
+
+  return(y)
+}
+```
+
+Define a function, countCompleteCases, which creates a dataframe with all possible combinations of variables and the corresponding count of complete cases using those variables
+
+```{r}
+countCompleteCases <- function(df, LoV, variables) {
+    # default data for example
+    df = example_data
+    
+    # create data frame to keep track of complete cases using different combinations of variables
+    complete_cases <- data.frame(complete_cases_count = character(), 
+                                 keep_variables = character(), 
+                                 drop_variables = character(),
+                                 num_of_variables = integer())
+  
+  # append row to dataframe with complete cases count, kept variables, and dropped variables for each combination
+  for (i in 1:length(LoV)) {
+    # df <- luminex_reduced
+    
+    # obtain vector with combination of variables to drop
+    drop_variables <- LoV[[i]] %>%
+      sort()
+    
+    # count the number of complete cases after dropping given combination of variables
+    cc <- df %>%
+      select(-all_of(drop_variables)) %>%
+      filter(complete.cases(.)) %>%
+      nrow()
+    
+    # setdiff() = retrieve elements of x that are not in y
+    keep_variables <- setdiff(x = variables, y = drop_variables) %>%
+      sort()
+    
+    num_of_variables <- length(keep_variables)
+      
+    # append row to dataframe with complete cases count, kept variables, and dropped variables for each combination
+    complete_cases[nrow(complete_cases) + 1, ] = c(cc, toString(keep_variables), toString(drop_variables), num_of_variables)
+    
+  }
+  
+  complete_cases_final <- complete_cases %>%
+      mutate(complete_cases_count = as.numeric(complete_cases_count)) %>%
+      arrange(desc(complete_cases_count)) %>%
+      filter(num_of_variables != 0)
+  
+  return(complete_cases_final)
+  
+}
+```
+
+## Example input data
+
+**DO NOT USE THESE DATA - only here to show what your input data frame should look like**
+
+Create some example data using the Iris dataset
+
+```{r}
+# import iris dataset
+data('iris')
+
+# create different proportions of missingness in every variable
+prop_missing <- c(0.1, 0.21, .12, .05, .007)
+vars <- names(iris)
+
+# introduce missingness in given variables
+example_data <- delete_MCAR(iris, prop_missing, vars)
+```
+
+**Input dataframe format**: remove any unwanted or identifying variables (sample IDs, etc.), leaving only variables you're interested in keeping for your analysis. Please see below for example.
+
+```{r}
+head(example_data)
+```
+
+## Implementation
+
+**Make sure to use your own data here!**
+
+Replace 'example data' with dataframe containing your own data when creating the 'variables' and 'complete_cases' objects below
+
+Select combination of variables that produces the highest number of complete cases (use your own data here)
+
+```{r}
+# USE YOUR DATA HERE IN PLACE OF 'example data' ################################
+# create vector with all variable names
+variables <- names(example_data)
+
+# pass in variables names vector into createCombinations() to create dataframe with all possible combinations of all variables
+combinations <- createCombinations(variables) 
+
+# turn data frame from above into list of vectors, where each row is separated into it's own vector
+# each vector has a unique combination of the variables in your data
+LoV <- combinations %>%
+  apply(., 1,as.list) %>% # convert dataframe to list of lists
+  lapply(unlist, use.names = FALSE) %>% # convert list of lists into list of vectors
+  lapply(stringi::stri_remove_empty) # remove empty strings from vectors in list
+
+# USE YOUR DATA HERE IN PLACE OF 'example data' ################################
+# count number of complete cases for all possible combinations of variables
+complete_cases <- countCompleteCases(example_data, LoV, variables)
+```
+
+## Output
+
+```{r}
+head(complete_cases)
+```
