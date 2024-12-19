@@ -48,51 +48,30 @@ createCombinations <- function(input){
 }
 ```
 
-Define a function, countCompleteCases, which creates a dataframe with all possible combinations of variables and the corresponding count of complete cases using those variables
+countCompleteCases is a function that creates a list containing 4 elements: one combination of your variables, the corresponding count of complete cases across those variables, the variables from your dataset that are missing from the combination, and the number of variables in the combination.
 
 ```{r}
-countCompleteCases <- function(df, LoV, variables) {
-    # default data for example
-    df = example_data
+countCompleteCases <- function(keep_vars, data_df, all_vars) {
+    # vector with combination of variables that will be considered when counting complete cases, NAs need to be removed
+    keep_vars <- keep_vars[!is.na(keep_vars)]
     
-    # create data frame to keep track of complete cases using different combinations of variables
-    complete_cases <- data.frame(complete_cases_count = character(), 
-                                 keep_variables = character(), 
-                                 drop_variables = character(),
-                                 num_of_variables = integer())
-  
-  # append row to dataframe with complete cases count, kept variables, and dropped variables for each combination
-  for (i in 1:length(LoV)) {
-    # df <- luminex_reduced
+    # store variables that will de dropped in vector
+    drop_vars <- setdiff(all_vars, keep_vars)
     
-    # obtain vector with combination of variables to drop
-    drop_variables <- LoV[[i]] %>%
-      sort()
+    # count the number of complete cases across specified variables
+    complete_cases <- data_df %>%
+        # only keep variables in given combo
+        select(all_of(keep_vars)) %>%
+        # only keep observations with data for all variables
+        filter(complete.cases(.)) %>%
+        # count number of complete cases
+        nrow(.)
     
-    # count the number of complete cases after dropping given combination of variables
-    cc <- df %>%
-      select(-all_of(drop_variables)) %>%
-      filter(complete.cases(.)) %>%
-      nrow()
+    # save number of complete cases and names of variables
+    complete_cases_info <- c(complete_cases, toString(keep_vars), toString(drop_vars), length(keep_vars),
+                             rep(NA, times = length(all_vars) - 4)
+                             )
     
-    # setdiff() = retrieve elements of x that are not in y
-    keep_variables <- setdiff(x = variables, y = drop_variables) %>%
-      sort()
-    
-    num_of_variables <- length(keep_variables)
-      
-    # append row to dataframe with complete cases count, kept variables, and dropped variables for each combination
-    complete_cases[nrow(complete_cases) + 1, ] = c(cc, toString(keep_variables), toString(drop_variables), num_of_variables)
-    
-  }
-  
-  complete_cases_final <- complete_cases %>%
-      mutate(complete_cases_count = as.numeric(complete_cases_count)) %>%
-      arrange(desc(complete_cases_count)) %>%
-      filter(num_of_variables != 0)
-  
-  return(complete_cases_final)
-  
 }
 ```
 
@@ -124,28 +103,52 @@ head(example_data)
 
 **Make sure to use your own data here!**
 
-Replace 'example data' with dataframe containing your own data when creating the 'variables' and 'complete_cases' objects below
-
-Select combination of variables that produces the highest number of complete cases (use your own data here)
+Let's upload your data here and specify the minimum number of variables you want to keep in your dataset:
 
 ```{r}
-# USE YOUR DATA HERE IN PLACE OF 'example data' ################################
+# create an object containing your data
+data <- read.csv(file  = 'path/to/data.csv')
+
+# specify the minimum number of variables that must be kept
+min_num_vars <- ... # replace ... with integer
+```
+
+Now, let's create a dataframe that contains all possible combinations of the variables in your data
+
+```{r}
 # create vector with all variable names
-variables <- names(example_data)
+variables <- names(data)
 
 # pass in variables names vector into createCombinations() to create dataframe with all possible combinations of all variables
 combinations <- createCombinations(variables) 
 
-# turn data frame from above into list of vectors, where each row is separated into it's own vector
-# each vector has a unique combination of the variables in your data
-LoV <- combinations %>%
-  apply(., 1,as.list) %>% # convert dataframe to list of lists
-  lapply(unlist, use.names = FALSE) %>% # convert list of lists into list of vectors
-  lapply(stringi::stri_remove_empty) # remove empty strings from vectors in list
+# count number of variables in every combination and only keep combos with minimum number of variables specified by user
+var_count <- combinations %>%
+  mutate_all(list(~na_if(.,""))) %>%
+  rowwise() %>%
+  mutate(num_vars = sum(!is.na(across(everything())))) %>%
+  filter(num_vars >= min_num_vars) %>%
+    select(!num_vars) %>%
+  t(.) %>%
+  as.data.frame(.)
+```
 
-# USE YOUR DATA HERE IN PLACE OF 'example data' ################################
-# count number of complete cases for all possible combinations of variables
-complete_cases <- countCompleteCases(example_data, LoV, variables)
+Finally, count the number of complete cases across each combination of variables in your sample
+
+```{r}
+complete_cases <- var_count %>%
+  mutate(
+    across(.cols = names(.), 
+           .fns = ~countCompleteCases(keep_vars = .,
+                                      data_df = data,
+                                      all_vars = variables),
+           .names = '{.col}_cc')
+  ) %>%
+  select(ends_with('_cc')) %>%
+  janitor::remove_empty(which = c("rows")) %>%
+  t(.) %>%
+  as.data.frame(.) %>%
+  setNames(c('complete_cases', 'keep_vars', 'drop_vars', 'num_vars_kept'))
 ```
 
 ## Output
