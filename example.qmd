@@ -1,5 +1,5 @@
 ---
-title: "Variable Selection Tool to Maximize Complete Cases"
+title: "Example of complete cases tool using the Iris data set"
 author: "Selene Banuelos"
 format: 
     html:
@@ -9,11 +9,11 @@ editor: visual
 
 ## Summary
 
-The purpose of this script is to evaluate the number of complete cases for every possible combination of variables in your data, to help you decide which variables to keep and which to drop to maximize sample size. The output is a table that lists every possible combination of variables present in the data set and the corresponding number of complete cases for each given combination.
+This is an example of using the complete cases tool with the Iris data set. Missingness is introduced to the data set to simulate real world data.
 
 ## Setup
 
-```{r warning=FALSE, message=FALSE}
+```{r}
 library(tidyverse)
 library(missMethods)
 
@@ -21,12 +21,6 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Functions
-
-The code used in the createCombinations function has been adapted from Stack Overflow user, @Park <https://stackoverflow.com/users/16729175/park>
-
-The original code can be found here: <https://stackoverflow.com/questions/70060473/create-combination-of-all-elements-in-a-list>
-
-createCombinations() is a function that creates all possible combinations of elements in a given list
 
 ```{r}
 createCombinations <- function(input){
@@ -45,8 +39,6 @@ createCombinations <- function(input){
   return(y)
 }
 ```
-
-countCompleteCases() is a function that creates a list containing 4 elements: one combination of your variables, the corresponding count of complete cases across those variables, the variables from your data set that are missing from the combination, and the number of variables in the combination.
 
 ```{r}
 countCompleteCases <- function(keep_vars, data_df, all_vars) {
@@ -73,25 +65,39 @@ countCompleteCases <- function(keep_vars, data_df, all_vars) {
 }
 ```
 
-## Implementation
-
-Let's upload your data here and specify the minimum number of variables you want to keep in your dataset
-
-**Note**: remove any unwanted or identifying variables (sample IDs, etc.), leaving only variables you're interested in keeping for your analysis.
+## Create example input data using Iris data set
 
 ```{r}
-# create an object containing your data
-data <- read.csv(file  = 'path/to/data.csv')
+# import iris dataset
+data('iris')
 
-# specify the minimum number of variables that must be kept
-min_num_vars <- ... # replace ... with integer
+# create different proportions of missingness in every variable
+prop_missing <- c(0.1, 0.21, .12, .05, .007)
+vars <- names(iris)
+
+# introduce missingness in given variables
+example_data <- delete_MCAR(iris, prop_missing, vars)
+
+# view format of input data
+view(example_data)
 ```
 
-Now, let's create a data frame that contains all possible combinations of the variables in your data
+## Implementation
+
+Specify the minimum number of variables in each combination. This step reduces the number of combinations evaluated and can dramatically reduce the time it takes for the script to run.
+
+```{r}
+# use integer to specify minimum number of variables that must be kept
+min_num_vars <- 3
+
+# this example will only show combinations of 3 or more variables
+```
+
+Now, let's create a data frame that contains all possible combinations of the variables in the Iris data
 
 ```{r}
 # create vector with all variable names
-variables <- names(data)
+variables <- names(example_data)
 
 # pass in variables names vector into createCombinations() to create dataframe with all possible combinations of all variables
 combinations <- createCombinations(variables) 
@@ -107,14 +113,14 @@ var_count <- combinations %>%
   as.data.frame(.)
 ```
 
-Finally, count the number of complete cases across each combination of variables in your sample
+Finally, count the number of complete cases across each combination of variables in the Iris data
 
 ```{r}
 complete_cases <- var_count %>%
   mutate(
     across(.cols = names(.), 
            .fns = ~countCompleteCases(keep_vars = .,
-                                      data_df = data,
+                                      data_df = example_data,
                                       all_vars = variables),
            .names = '{.col}_cc')
   ) %>%
